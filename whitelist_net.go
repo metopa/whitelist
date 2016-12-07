@@ -30,7 +30,7 @@ type NetACL interface {
 // constructor functions. This particular implementation is
 // unoptimised and will not scale.
 type BasicNet struct {
-	lock      *sync.Mutex
+	lock      *sync.RWMutex
 	whitelist []*net.IPNet
 }
 
@@ -40,8 +40,8 @@ func (wl *BasicNet) Permitted(ip net.IP) bool {
 		return false
 	}
 
-	wl.lock.Lock()
-	defer wl.lock.Unlock()
+	wl.lock.RLock()
+	defer wl.lock.RUnlock()
 	for i := range wl.whitelist {
 		if wl.whitelist[i].Contains(ip) {
 			return true
@@ -89,19 +89,18 @@ func (wl *BasicNet) Remove(n *net.IPNet) {
 
 // NewBasicNet constructs a new basic network-based whitelist.
 func NewBasicNet() *BasicNet {
-	return &BasicNet{
-		lock: new(sync.Mutex),
-	}
+	return &BasicNet{}
 }
 
 // MarshalJSON serialises a network whitelist to a comma-separated
 // list of networks.
 func (wl *BasicNet) MarshalJSON() ([]byte, error) {
 	var ss = make([]string, 0, len(wl.whitelist))
+	wl.lock.RLock()
 	for i := range wl.whitelist {
 		ss = append(ss, wl.whitelist[i].String())
 	}
-
+	wl.lock.RUnlock()
 	out := []byte(`"` + strings.Join(ss, ",") + `"`)
 	return out, nil
 }
@@ -117,12 +116,14 @@ func (wl *BasicNet) UnmarshalJSON(in []byte) error {
 		wl.lock = new(sync.Mutex)
 	}
 
-	wl.lock.Lock()
-	defer wl.lock.Unlock()
+
 
 	var err error
 	netString := strings.TrimSpace(string(in[1 : len(in)-1]))
 	nets := strings.Split(netString, ",")
+
+	wl.lock.Lock()
+	defer wl.lock.Unlock()
 	wl.whitelist = make([]*net.IPNet, len(nets))
 	for i := range nets {
 		addr := strings.TrimSpace(nets[i])

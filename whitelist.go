@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"fmt"
 )
 
 // An ACL stores a list of permitted IP addresses, and handles
@@ -53,7 +54,7 @@ func validIP(ip net.IP) bool {
 // than an IPv6 address; namely, the IPv4 localhost will not match
 // the IPv6 localhost.
 type Basic struct {
-	lock      *sync.Mutex
+	lock      *sync.RWMutex
 	whitelist map[string]bool
 }
 
@@ -63,9 +64,9 @@ func (wl *Basic) Permitted(ip net.IP) bool {
 		return false
 	}
 
-	wl.lock.Lock()
-	permitted := wl.whitelist[ip.String()]
-	wl.lock.Unlock()
+	wl.lock.RLock()
+	defer wl.lock.RUnlock()
+	_, permitted := wl.whitelist[ip.String()] //TODO Ensure map doesn't grow here
 	return permitted
 }
 
@@ -94,7 +95,6 @@ func (wl *Basic) Remove(ip net.IP) {
 // NewBasic returns a new initialised basic whitelist.
 func NewBasic() *Basic {
 	return &Basic{
-		lock:      new(sync.Mutex),
 		whitelist: map[string]bool{},
 	}
 }
@@ -102,8 +102,8 @@ func NewBasic() *Basic {
 // MarshalJSON serialises a host whitelist to a comma-separated list of
 // hosts, implementing the json.Marshaler interface.
 func (wl *Basic) MarshalJSON() ([]byte, error) {
-	wl.lock.Lock()
-	defer wl.lock.Unlock()
+	wl.lock.RLock()
+	defer wl.lock.RUnlock()
 	var ss = make([]string, 0, len(wl.whitelist))
 	for ip := range wl.whitelist {
 		ss = append(ss, ip)
@@ -118,10 +118,6 @@ func (wl *Basic) MarshalJSON() ([]byte, error) {
 func (wl *Basic) UnmarshalJSON(in []byte) error {
 	if in[0] != '"' || in[len(in)-1] != '"' {
 		return errors.New("whitelist: invalid whitelist")
-	}
-
-	if wl.lock == nil {
-		wl.lock = new(sync.Mutex)
 	}
 
 	wl.lock.Lock()
@@ -151,8 +147,8 @@ func (wl *Basic) UnmarshalJSON(in []byte) error {
 // DumpBasic returns a whitelist as a byte slice where each IP is on
 // its own line.
 func DumpBasic(wl *Basic) []byte {
-	wl.lock.Lock()
-	defer wl.lock.Unlock()
+	wl.lock.RLock()
+	defer wl.lock.RUnlock()
 
 	var addrs = make([]string, 0, len(wl.whitelist))
 	for ip := range wl.whitelist {
@@ -173,7 +169,7 @@ func LoadBasic(in []byte) (*Basic, error) {
 	for _, addr := range addrs {
 		ip := net.ParseIP(addr)
 		if ip == nil {
-			return nil, errors.New("whitelist: invalid address")
+			return nil, fmt.Errorf("whitelist: invalid address %s", addr)
 		}
 		wl.Add(ip)
 	}
