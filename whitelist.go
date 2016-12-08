@@ -49,8 +49,8 @@ func validIP(ip net.IP) bool {
 	return false
 }
 
-// Basic implements a basic map-backed whitelister that uses an
-// RWMutex for conccurency. IPv4 addresses are treated differently
+// Basic implements a basic map-backed whitelister that uses a
+// shared mutex for conccurrency. IPv4 addresses are treated differently
 // than an IPv6 address; namely, the IPv4 localhost will not match
 // the IPv6 localhost.
 type Basic struct {

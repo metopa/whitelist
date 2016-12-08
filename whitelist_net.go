@@ -25,8 +25,8 @@ type NetACL interface {
 	Remove(*net.IPNet)
 }
 
-// BasicNet implements a basic map-backed network whitelist using
-// locks for concurrency. It must be initialised with one of the
+// BasicNet implements a basic network whitelist using
+// shared locks for concurrency. It must be initialised with one of the
 // constructor functions. This particular implementation is
 // unoptimised and will not scale.
 type BasicNet struct {
