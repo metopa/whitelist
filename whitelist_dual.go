@@ -7,6 +7,10 @@ import (
 	"net"
 )
 
+const (
+	LaunchPolicySequenced = 0
+	LaunchPolicyAsync = 1
+)
 // A DualACL stores a list of permitted IP addresses and networks.
 type DualACL interface {
 	ACL
@@ -35,11 +39,23 @@ type DualACL interface {
 type BasicDual struct {
 	Addresses HostACL `json:"addresses"`
 	Networks  NetACL  `json:"networks"`
+	launchPolicy int  `json:"-"`
 }
 
 // Permitted returns true if the IP has been whitelisted.
 func (wl *BasicDual) Permitted(ip net.IP) bool {
-	return wl.Addresses.Permitted(ip) || wl.Networks.Permitted(ip)
+	if (wl.launchPolicy == LaunchPolicySequenced) {
+		return wl.Addresses.Permitted(ip) || wl.Networks.Permitted(ip)
+	} else { //LaunchPolicyAsync
+		res := make(chan bool, 2)
+		go func() {
+			res <- wl.Addresses.Permitted(ip)
+		}()
+		go func() {
+			res <- wl.Networks.Permitted(ip)
+		}()
+		return <-res || <-res
+	}
 }
 
 // AddAddress whitelists an IP.
@@ -66,10 +82,11 @@ func (wl *BasicDual) RemoveNetwork(n *net.IPNet) {
 }
 
 // NewBasicNet constructs a new basic dual whitelist.
-func NewBasicDual() *BasicDual {
+func NewBasicDual(launchPolicy int) *BasicDual {
 	return &BasicDual{
 		Addresses: NewBasic(),
 		Networks: NewBasicNet(),
+		launchPolicy: launchPolicy,
 	}
 }
 
@@ -82,5 +99,6 @@ func NewStubDual() *BasicDual {
 	return &BasicDual{
 		Addresses: NewHostStub(),
 		Networks: NewNetStub(),
+		launchPolicy: LaunchPolicySequenced,
 	}
 }
