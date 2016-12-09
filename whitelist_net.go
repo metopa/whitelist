@@ -30,7 +30,7 @@ type NetACL interface {
 // constructor functions. This particular implementation is
 // unoptimised and will not scale.
 type BasicNet struct {
-	lock      *sync.RWMutex
+	lock      sync.RWMutex
 	whitelist []*net.IPNet
 }
 
@@ -111,12 +111,6 @@ func (wl *BasicNet) UnmarshalJSON(in []byte) error {
 	if in[0] != '"' || in[len(in)-1] != '"' {
 		return errors.New("whitelist: invalid whitelist")
 	}
-
-	if wl.lock == nil {
-		wl.lock = new(sync.Mutex)
-	}
-
-
 
 	var err error
 	netString := strings.TrimSpace(string(in[1 : len(in)-1]))

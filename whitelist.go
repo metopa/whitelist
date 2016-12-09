@@ -54,7 +54,7 @@ func validIP(ip net.IP) bool {
 // than an IPv6 address; namely, the IPv4 localhost will not match
 // the IPv6 localhost.
 type Basic struct {
-	lock      *sync.RWMutex
+	lock      sync.RWMutex
 	whitelist map[string]bool
 }
 
