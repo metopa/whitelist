@@ -107,7 +107,7 @@ func TestStubWhitelist(t *testing.T) {
 	}
 }
 
-func TestMarshalHost(t *testing.T) {
+func TestMarshalCompatHost(t *testing.T) {
 	tv := map[string]*Basic{
 		"test-a": NewBasic(),
 		"test-b": NewBasic(),
@@ -133,6 +133,150 @@ func TestMarshalHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
+	if len(tvPrime["test-a"].whitelist) != 2 {
+		t.Fatalf("Expected whitelist to have 2 addresses, but have %d", len(tvPrime["test-a"].whitelist))
+	}
+
+	if len(tvPrime["test-b"].whitelist) != 0 {
+		t.Fatalf("Expected whitelist to have 0 addresses, but have %d", len(tvPrime["test-b"].whitelist))
+	}
+
+	if !checkIPString(tvPrime["test-a"], "192.168.3.1", t) || !checkIPString(tvPrime["test-a"], "192.168.3.1", t) {
+		t.Fatal("whitelist should have permitted address")
+	}
+
+	if checkIPString(tvPrime["test-b"], "192.168.3.1", t) {
+		t.Fatal("whitelist should have denied address")
+	}
+}
+
+func TestMarshalNewHost(t *testing.T) {
+	tv := map[string]*Basic{
+		"test-a": NewBasic2(JsonFormatNew),
+		"test-b": NewBasic2(JsonFormatNew),
+	}
+
+	ip := net.ParseIP("192.168.3.1")
+	tv["test-a"].Add(ip)
+
+	ip = net.ParseIP("192.168.3.2")
+	tv["test-a"].Add(ip)
+
+	if len(tv["test-a"].whitelist) != 2 {
+		t.Fatalf("Expected whitelist to have 2 addresses, but have %d", len(tv["test-a"].whitelist))
+	}
+
+	out, err := json.Marshal(tv)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	var tvPrime map[string]*Basic
+	err = json.Unmarshal(out, &tvPrime)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if len(tvPrime["test-a"].whitelist) != 2 {
+		t.Fatalf("Expected whitelist to have 2 addresses, but have %d", len(tvPrime["test-a"].whitelist))
+	}
+
+	if len(tvPrime["test-b"].whitelist) != 0 {
+		t.Fatalf("Expected whitelist to have 0 addresses, but have %d", len(tvPrime["test-b"].whitelist))
+	}
+
+	if !checkIPString(tvPrime["test-a"], "192.168.3.1", t) || !checkIPString(tvPrime["test-a"], "192.168.3.1", t) {
+		t.Fatal("whitelist should have permitted address")
+	}
+
+	if checkIPString(tvPrime["test-b"], "192.168.3.1", t) {
+		t.Fatal("whitelist should have denied address")
+	}
+}
+
+func TestMarshalCompatFormattedHost(t *testing.T) {
+	tv := map[string]*Basic{
+		"test-a": NewBasic(),
+		"test-b": NewBasic(),
+	}
+
+	ip := net.ParseIP("192.168.3.1")
+	tv["test-a"].Add(ip)
+
+	ip = net.ParseIP("192.168.3.2")
+	tv["test-a"].Add(ip)
+
+	if len(tv["test-a"].whitelist) != 2 {
+		t.Fatalf("Expected whitelist to have 2 addresses, but have %d", len(tv["test-a"].whitelist))
+	}
+
+	out, err := json.MarshalIndent(tv, "", "  ")
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	var tvPrime map[string]*Basic
+	err = json.Unmarshal(out, &tvPrime)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if len(tvPrime["test-a"].whitelist) != 2 {
+		t.Fatalf("Expected whitelist to have 2 addresses, but have %d", len(tvPrime["test-a"].whitelist))
+	}
+
+	if len(tvPrime["test-b"].whitelist) != 0 {
+		t.Fatalf("Expected whitelist to have 0 addresses, but have %d", len(tvPrime["test-b"].whitelist))
+	}
+
+	if !checkIPString(tvPrime["test-a"], "192.168.3.1", t) || !checkIPString(tvPrime["test-a"], "192.168.3.1", t) {
+		t.Fatal("whitelist should have permitted address")
+	}
+
+	if checkIPString(tvPrime["test-b"], "192.168.3.1", t) {
+		t.Fatal("whitelist should have denied address")
+	}
+}
+
+func TestMarshalNewFormattedHost(t *testing.T) {
+	tv := map[string]*Basic{
+		"test-a": NewBasic2(JsonFormatNew),
+		"test-b": NewBasic2(JsonFormatNew),
+	}
+
+	ip := net.ParseIP("192.168.3.1")
+	tv["test-a"].Add(ip)
+
+	ip = net.ParseIP("192.168.3.2")
+	tv["test-a"].Add(ip)
+
+	if len(tv["test-a"].whitelist) != 2 {
+		t.Fatalf("Expected whitelist to have 2 addresses, but have %d", len(tv["test-a"].whitelist))
+	}
+
+	out, err := json.MarshalIndent(tv, "", "  ")
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	var tvPrime map[string]*Basic
+	err = json.Unmarshal(out, &tvPrime)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if len(tvPrime["test-a"].whitelist) != 2 {
+		t.Fatalf("Expected whitelist to have 2 addresses, but have %d", len(tvPrime["test-a"].whitelist))
+	}
+
+	if len(tvPrime["test-b"].whitelist) != 0 {
+		t.Fatalf("Expected whitelist to have 0 addresses, but have %d", len(tvPrime["test-b"].whitelist))
+	}
+
+	if !checkIPString(tvPrime["test-a"], "192.168.3.1", t) || !checkIPString(tvPrime["test-a"], "192.168.3.1", t) {
+		t.Fatal("whitelist should have permitted address")
+	}
+
+	if checkIPString(tvPrime["test-b"], "192.168.3.1", t) {
+		t.Fatal("whitelist should have denied address")
+	}
 }
 
 func TestMarshalHostFail(t *testing.T) {
@@ -143,6 +287,14 @@ func TestMarshalHostFail(t *testing.T) {
 	}
 
 	badInput = `"192.168.3.1/32,127.0.0.252/32"`
+	if err := wl.UnmarshalJSON([]byte(badInput)); err == nil {
+		t.Fatal("Expected failure unmarshaling bad JSON input.")
+	}
+	badInput = `["192.168.3.1", "127.0.0.252/32"]`
+	if err := wl.UnmarshalJSON([]byte(badInput)); err == nil {
+		t.Fatal("Expected failure unmarshaling bad JSON input.")
+	}
+	badInput = `[["192.168.3.1", "127.0.0.252"]`
 	if err := wl.UnmarshalJSON([]byte(badInput)); err == nil {
 		t.Fatal("Expected failure unmarshaling bad JSON input.")
 	}
