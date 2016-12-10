@@ -119,9 +119,11 @@ func (wl *BasicNet) UnmarshalJSON(in []byte) error {
 	wl.lock.Lock()
 	defer wl.lock.Unlock()
 	wl.whitelist = make([]*net.IPNet, len(nets))
+	skipped := 0
 	for i := range nets {
 		addr := strings.TrimSpace(nets[i])
 		if addr == "" {
+			skipped++
 			continue
 		}
 		_, wl.whitelist[i], err = net.ParseCIDR(addr)
@@ -130,7 +132,7 @@ func (wl *BasicNet) UnmarshalJSON(in []byte) error {
 			return err
 		}
 	}
-
+	wl.whitelist = wl.whitelist[0:len(wl.whitelist) - skipped]
 	return nil
 }
 
