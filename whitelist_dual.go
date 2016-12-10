@@ -37,8 +37,8 @@ type DualACL interface {
 // constructor functions. This particular implementation is
 // unoptimised for large number of whitelisted networks and will not scale.
 type BasicDual struct {
-	Addresses HostACL `json:"addresses"`
-	Networks  NetACL  `json:"networks"`
+	Addresses    HostACL `json:"addresses"`
+	Networks     NetACL  `json:"networks"`
 	launchPolicy int  `json:"-"`
 }
 
@@ -46,7 +46,8 @@ type BasicDual struct {
 func (wl *BasicDual) Permitted(ip net.IP) bool {
 	if (wl.launchPolicy == LaunchPolicySequenced) {
 		return wl.Addresses.Permitted(ip) || wl.Networks.Permitted(ip)
-	} else { //LaunchPolicyAsync
+	} else {
+		//LaunchPolicyAsync
 		res := make(chan bool, 2)
 		go func() {
 			res <- wl.Addresses.Permitted(ip)
@@ -82,10 +83,10 @@ func (wl *BasicDual) RemoveNetwork(n *net.IPNet) {
 }
 
 // NewBasicNet constructs a new basic dual whitelist.
-func NewBasicDual(launchPolicy int) *BasicDual {
+func NewBasicDual(launchPolicy int, jsonFormat int) *BasicDual {
 	return &BasicDual{
-		Addresses: NewBasic(),
-		Networks: NewBasicNet(),
+		Addresses: NewBasic2(jsonFormat),
+		Networks: NewBasicNet2(jsonFormat),
 		launchPolicy: launchPolicy,
 	}
 }

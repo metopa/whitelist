@@ -10,6 +10,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"encoding/json"
 )
 
 // A NetACL stores a list of permitted IP networks.
@@ -30,13 +31,15 @@ type NetACL interface {
 // constructor functions. This particular implementation is
 // unoptimised and will not scale.
 type BasicNet struct {
-	lock      sync.RWMutex
-	whitelist []*net.IPNet
+	jsonFormat int
+	lock       sync.RWMutex
+	whitelist  []*net.IPNet
 }
 
 // Permitted returns true if the IP has been whitelisted.
 func (wl *BasicNet) Permitted(ip net.IP) bool {
-	if !validIP(ip) { // see whitelist.go for this function
+	if !validIP(ip) {
+		// see whitelist.go for this function
 		return false
 	}
 
@@ -84,16 +87,23 @@ func (wl *BasicNet) Remove(n *net.IPNet) {
 		return
 	}
 
-	wl.whitelist = append(wl.whitelist[:index], wl.whitelist[index+1:]...)
+	wl.whitelist = append(wl.whitelist[:index], wl.whitelist[index + 1:]...)
 }
 
 // NewBasicNet constructs a new basic network-based whitelist.
 func NewBasicNet() *BasicNet {
-	return &BasicNet{}
+	return NewBasicNet2(JsonFormatCompatibility)
+}
+
+// NewBasicNet constructs a new basic network-based whitelist.
+func NewBasicNet2(jsonFormat int) *BasicNet {
+	return &BasicNet{
+		jsonFormat: jsonFormat,
+	}
 }
 
 // MarshalJSON serialises a network whitelist to a comma-separated
-// list of networks.
+// list of networks (compatibility format) or a JSON array of strings (new format).
 func (wl *BasicNet) MarshalJSON() ([]byte, error) {
 	var ss = make([]string, 0, len(wl.whitelist))
 	wl.lock.RLock()
@@ -101,20 +111,45 @@ func (wl *BasicNet) MarshalJSON() ([]byte, error) {
 		ss = append(ss, wl.whitelist[i].String())
 	}
 	wl.lock.RUnlock()
-	out := []byte(`"` + strings.Join(ss, ",") + `"`)
+	var out []byte
+	if (wl.jsonFormat == JsonFormatCompatibility) {
+		out = []byte(`"` + strings.Join(ss, ",") + `"`)
+	} else if (wl.jsonFormat == JsonFormatNew) {
+		if (len(ss) > 0) {
+			out = []byte(`["` + strings.Join(ss, `","`) + `"]`)
+		} else {
+			out = []byte("[]")
+		}
+	} else {
+		return nil, errors.New("whitelist.Basic: unsupported JSON format")
+	}
+
 	return out, nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface for network
-// whitelists, taking a comma-separated string of networks.
+// whitelists, taking a comma-separated string of networks or a JSON array of strings.
 func (wl *BasicNet) UnmarshalJSON(in []byte) error {
-	if in[0] != '"' || in[len(in)-1] != '"' {
-		return errors.New("whitelist: invalid whitelist")
+	newFormat := false
+	if in[0] == '[' && in[len(in) - 1] == ']' {
+		newFormat = true
+	}
+
+	if !newFormat && (in[0] != '"' || in[len(in) - 1] != '"') {
+		return errors.New("whitelist.BasicNet: invalid whitelist")
 	}
 
 	var err error
-	netString := strings.TrimSpace(string(in[1 : len(in)-1]))
-	nets := strings.Split(netString, ",")
+	var nets []string
+	if !newFormat {
+		netString := strings.TrimSpace(string(in[1 : len(in) - 1]))
+		nets = strings.Split(netString, ",")
+	} else {
+		err := json.Unmarshal(in, &nets)
+		if err != nil {
+			return errors.New("whitelist.BasicNet: " + err.Error())
+		}
+	}
 
 	wl.lock.Lock()
 	defer wl.lock.Unlock()
@@ -129,7 +164,7 @@ func (wl *BasicNet) UnmarshalJSON(in []byte) error {
 		_, wl.whitelist[i], err = net.ParseCIDR(addr)
 		if err != nil {
 			wl.whitelist = nil
-			return err
+			return errors.New("whitelist.BasicNet: invalid IP network " + addr)
 		}
 	}
 	wl.whitelist = wl.whitelist[0:len(wl.whitelist) - skipped]

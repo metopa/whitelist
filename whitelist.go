@@ -10,7 +10,13 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"encoding/json"
 	"fmt"
+)
+
+const (
+	JsonFormatCompatibility = 0
+	JsonFormatNew = 1
 )
 
 // An ACL stores a list of permitted IP addresses, and handles
@@ -54,8 +60,9 @@ func validIP(ip net.IP) bool {
 // than an IPv6 address; namely, the IPv4 localhost will not match
 // the IPv6 localhost.
 type Basic struct {
-	lock      sync.RWMutex
-	whitelist map[string]bool
+	jsonFormat int
+	lock       sync.RWMutex
+	whitelist  map[string]bool
 }
 
 // Permitted returns true if the IP has been whitelisted.
@@ -93,14 +100,23 @@ func (wl *Basic) Remove(ip net.IP) {
 }
 
 // NewBasic returns a new initialised basic whitelist.
+// Compatibility JSON format is used.
 func NewBasic() *Basic {
+	return NewBasic2(JsonFormatCompatibility)
+}
+
+// NewBasic2 returns a new initialised basic whitelist.
+// Pass JsonFormatNew or JsonFormatCompatibility as an argument.
+func NewBasic2(jsonFormat int) *Basic {
 	return &Basic{
 		whitelist: map[string]bool{},
+		jsonFormat: jsonFormat,
 	}
 }
 
 // MarshalJSON serialises a host whitelist to a comma-separated list of
-// hosts, implementing the json.Marshaler interface.
+// hosts (compatibility format) or a JSON array of strings (new format),
+// implementing the json.Marshaler interface.
 func (wl *Basic) MarshalJSON() ([]byte, error) {
 	wl.lock.RLock()
 	defer wl.lock.RUnlock()
@@ -109,23 +125,46 @@ func (wl *Basic) MarshalJSON() ([]byte, error) {
 		ss = append(ss, ip)
 	}
 
-	out := []byte(`"` + strings.Join(ss, ",") + `"`)
+	var out []byte
+	if (wl.jsonFormat == JsonFormatCompatibility) {
+		out = []byte(`"` + strings.Join(ss, ",") + `"`)
+	} else if (wl.jsonFormat == JsonFormatNew) {
+		if (len(ss) > 0) {
+			out = []byte(`["` + strings.Join(ss, `","`) + `"]`)
+		} else {
+			out = []byte("[]")
+		}
+	} else {
+		return nil, errors.New("whitelist.Basic: unsupported JSON format")
+	}
 	return out, nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface for host
-// whitelists, taking a comma-separated string of hosts.
+// whitelists, taking a comma-separated string of hosts or a JSON array of strings.
 func (wl *Basic) UnmarshalJSON(in []byte) error {
-	if in[0] != '"' || in[len(in)-1] != '"' {
-		return errors.New("whitelist: invalid whitelist")
+	newFormat := false
+	if in[0] == '[' && in[len(in) - 1] == ']' {
+		newFormat = true
+	}
+	if !newFormat && (in[0] != '"' || in[len(in) - 1] != '"') {
+		return errors.New("whitelist.Basic: invalid whitelist")
+	}
+
+	var nets []string
+
+	if !newFormat {
+		netString := strings.TrimSpace(string(in[1 : len(in) - 1]))
+		nets = strings.Split(netString, ",")
+	} else {
+		err := json.Unmarshal(in, &nets)
+		if err != nil {
+			return errors.New("whitelist.Basic: " + err.Error())
+		}
 	}
 
 	wl.lock.Lock()
 	defer wl.lock.Unlock()
-
-	netString := strings.TrimSpace(string(in[1 : len(in)-1]))
-	nets := strings.Split(netString, ",")
-
 	wl.whitelist = map[string]bool{}
 	for i := range nets {
 		addr := strings.TrimSpace(nets[i])
@@ -136,7 +175,7 @@ func (wl *Basic) UnmarshalJSON(in []byte) error {
 		ip := net.ParseIP(addr)
 		if ip == nil {
 			wl.whitelist = nil
-			return errors.New("whitelist: invalid IP address " + addr)
+			return errors.New("whitelist.Basic: invalid IP address " + addr)
 		}
 		wl.whitelist[addr] = true
 	}
