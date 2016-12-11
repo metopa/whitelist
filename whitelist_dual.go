@@ -15,6 +15,10 @@ const (
 type DualACL interface {
 	ACL
 
+	// Permitted takes a net.Conn object, and returns true if the
+	// IP address is whitelisted (e.g. permitted access).
+	NetConnPermitted(net.Conn) bool
+
 	// Add takes an IP address and adds it to the whitelist so
 	// that it is now permitted.
 	AddAddress(net.IP)
@@ -57,6 +61,15 @@ func (wl *BasicDual) Permitted(ip net.IP) bool {
 		}()
 		return <-res || <-res
 	}
+}
+
+// NetConnPermitted returns true if the IP has been whitelisted.
+func (wl *BasicDual) NetConnPermitted(c net.Conn) bool {
+	ip, err := NetConnLookup(c)
+	if err != nil {
+		return false
+	}
+	return wl.Permitted(ip)
 }
 
 // AddAddress whitelists an IP.
